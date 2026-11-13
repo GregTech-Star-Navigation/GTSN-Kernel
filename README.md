@@ -63,6 +63,7 @@ CSV 在 `run/server/gtsnperf/gtsnperf-<时间戳>.csv`。
 
 - [`docs/设计.md`](docs/设计.md) —— 为什么这么拆、否决了哪些方案、五期边界
 - [`docs/接口.md`](docs/接口.md) —— 命令、CSV 格式、JVM 参数、内部 API
+- [`docs/实测数据.md`](docs/实测数据.md) —— 压测方法与结论（决定三期优先级）
 - [`AGENTS.md`](AGENTS.md) —— 给 agent 的项目约定
 
 ## 许可

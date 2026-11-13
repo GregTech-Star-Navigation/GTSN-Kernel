@@ -52,3 +52,4 @@ com.gtsn.kernel
 
 - `docs/设计.md` —— 为什么这么拆、否决了什么
 - `docs/接口.md` —— 命令、CSV、JVM 参数、内部 API
+- `docs/实测数据.md` —— 压测方法与结论

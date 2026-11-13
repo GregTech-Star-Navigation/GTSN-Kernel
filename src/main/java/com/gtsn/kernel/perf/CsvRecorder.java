@@ -72,7 +72,7 @@ public final class CsvRecorder {
         try {
             StringBuilder row = new StringBuilder(Long.toString(rows++));
             for (TickStage stage : TickStage.ALL) {
-                row.append(',').append(lastSampleMs(stage));
+                row.append(',').append(formatMs(StageProfiler.tickTotalMs(stage)));
             }
             out.write(row.toString());
             out.newLine();
@@ -86,17 +86,17 @@ public final class CsvRecorder {
         }
     }
 
-    private static String lastSampleMs(TickStage stage) {
-        int count = StageProfiler.sampleCount(stage);
-        if (count == 0) {
-            return "";
+    /**
+     * 本 tick 该阶段的总耗时（多世界已累加）。
+     *
+     * <p>之前取「环形缓冲最后一个样本」，多维度下会只记到最后一个（通常几乎空的）维度 ——
+     * 表现为 CSV 里 level_tick 接近 0 而 /gtsnperf 显示 1ms+。</p>
+     */
+    private static String formatMs(double millis) {
+        if (millis <= 0.0) {
+            return "0.000";
         }
-        long[] samples = StageProfiler.recentSamples(stage);
-        if (samples.length == 0) {
-            return "";
-        }
-        long nanos = samples[samples.length - 1];
-        return String.format(java.util.Locale.ROOT, "%.3f", nanos / 1_000_000.0);
+        return String.format(java.util.Locale.ROOT, "%.3f", millis);
     }
 
     public static void stop() {

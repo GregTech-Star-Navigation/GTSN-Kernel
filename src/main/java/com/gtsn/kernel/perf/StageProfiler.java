@@ -31,6 +31,15 @@ public final class StageProfiler {
     /** 每个阶段已写入的样本数（上限 CAPACITY）。 */
     private static final int[] COUNT = new int[STAGE_COUNT];
 
+    /**
+     * 本 tick 内每个阶段的累计耗时（纳秒）。
+     *
+     * <p>为什么需要它：{@code LEVEL_TICK} 这类阶段在一个 tick 内会被多个世界各调一次，
+     * 环形缓冲记录的是「单次样本」，直接取最后一个只会得到最后一个维度（通常几乎空）。
+     * CSV 要的是「本 tick 该阶段总共花了多少」，所以单独累加。</p>
+     */
+    private static final long[] TICK_TOTALS = new long[STAGE_COUNT];
+
     /** 每线程每阶段的开始时间。 */
     private static final ThreadLocal<long[]> STARTS =
             ThreadLocal.withInitial(() -> new long[STAGE_COUNT]);
@@ -85,12 +94,23 @@ public final class StageProfiler {
         if (elapsed < 0L) {
             return;
         }
+        TICK_TOTALS[index] += elapsed;
         int head = HEAD[index];
         SAMPLES[index][head] = elapsed;
         HEAD[index] = (head + 1) % CAPACITY;
         if (COUNT[index] < CAPACITY) {
             COUNT[index]++;
         }
+    }
+
+    /** 本 tick 内某阶段的累计耗时（毫秒，多世界已累加）。 */
+    public static double tickTotalMs(TickStage stage) {
+        return TICK_TOTALS[stage.ordinal()] / 1_000_000.0;
+    }
+
+    /** 每个 tick 结束时调用：清零本 tick 累加器。必须在读取 {@link #tickTotalMs} 之后。 */
+    public static void endTick() {
+        java.util.Arrays.fill(TICK_TOTALS, 0L);
     }
 
     /** 清空所有样本。 */

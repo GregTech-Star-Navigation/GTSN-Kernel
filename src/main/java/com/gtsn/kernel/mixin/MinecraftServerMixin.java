@@ -30,8 +30,10 @@ public abstract class MinecraftServerMixin {
     private void gtsnkernel$tickServerEnd(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         StageProfiler.end(TickStage.SERVER_TICK);
         // 每 tick 明细只在显式开启时写盘（内部判断，关闭时开销为一次 null 检查）。
+        // 顺序不能改：先读本 tick 累加值，再清零。
         CsvRecorder.tick();
         PeriodicReporter.tick();
+        StageProfiler.endTick();
     }
 
     @Inject(method = "tickChildren", at = @At("HEAD"))
