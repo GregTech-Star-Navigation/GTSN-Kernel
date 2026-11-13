@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.2 — 2026-11-14
+
+### 新增
+
+- **可选 GTCEu 依赖**：`./gradlew runServer -PwithGtceu` 会引入 GTCEu 7.5.4-patch01 +
+  LDLib + Registrate + Configuration（组织 GitHub Packages，需要 read:packages 凭据）。
+  默认不引入，避免每次构建都拉私有包。
+
+### 实测（第二轮）
+
+**区块生成/加载**：`/forceload` 分批加载到 6144 区块，`server_tick` 只到 1.385ms
+（对比实体负载 6.83ms）。启动期有 408ms 尖峰，但那是 spawn chunk 一次性预生成。
+
+**GTCEu**：799 台 GT 机器（lv_macerator + lv_assembler）只占 **0.143ms** 方块实体时间，
+而 2177 个原版漏斗/熔炉占 **2.204ms** —— GT 机器轻 15 倍，因为没能量就跳过 tick。
+
+### 结论修正
+
+原「方块实体 32%」是**原版漏斗**的数据。GT 机器空转占比不到 1%。三期优先级需要按机器
+类型细分，而不是笼统地「方块实体」。GT 机器**工作中**（有能量、跑配方、multiblock）的成本
+仍是未知数，需要真实场景测。
+
+详见 `docs/实测数据.md`。
+
 ## 0.2.1 — 2026-11-14
 
 ### 修复
