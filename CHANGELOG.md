@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.3 — 2026-11-14
+
+### 性能
+
+- **profiler 每 tick 开销从 2.2% 降到 0.04%**（占 5ms tick）。`begin/end` 每次都调
+  `ThreadLocal.get()`，52 次/卡顿 × 约 2μs。改成静态数组 + owner 线程比较后
+  65.5 ns/对 → 每 tick 0.0020 ms。
+- 新增 `StageProfilerOverheadTest` 锁住这个量级（关闭 9.1 ns / 开启 65.5 ns，阈值 1ms）。
+
+代价：不再支持多线程采集 —— 本来也只采集 owner 线程，多 region 之后按 region 分桶时再引入
+per-region 数组。
+
+### 新增
+
+- `tools/rcon.mjs` 加 `--batch` 模式：一条连接跑多句命令。摆 300 个僵尸从 30 秒降到 1 秒。
+
+### 实测（第三轮，详见 docs/实测数据.md）
+
+- **GT 机器没法用命令批量摆**：`fill` 几乎全失败，只能逐个 `setblock`，且需要下方有支撑。
+  所以「用命令造一个真实 GT 工厂」不可行，GT 数据仍只有空转值。
+- **停服要用 RCON `stop`**：强杀会导致 Gradle transform 缓存损坏，下次构建直接失败。
+
 ## 0.2.2 — 2026-11-14
 
 ### 新增
