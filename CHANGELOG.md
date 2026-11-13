@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.0 — 2026-11-14
+
+### 新增（二期 2a：region 切分与依赖检测）
+
+- `RegionId`：region 网格坐标（record，可比较、可复现排序）。
+- `RegionMap` / `GridRegionMap`：区块 → region 的固定网格切分。用 `Math.floorDiv` 处理
+  负坐标 —— 用 `/` 会把世界原点以西（-1/16 = 0）和以东的区块混进同一个 region。
+- `SimpleRegion`：`Region` 的最小实现。
+- `SerialRegionScheduler`：按 `RegionId` 排序**串行** tick 所有 region；union-find 做合并；
+  **DFS 检测任意环**（只查直接反向边不够，A→B→C→A 同样会死锁）。
+- `TickScheduler` 接口调整：`merge` 参数从 `int` 改为 `RegionId`，新增 `mergeCount()`。
+
+### 为什么串行也算二期
+
+合并规则、访问检测、region 归属都不依赖真并发。只有「两个 region 同时写同一份数据」的竞态
+需要真并行才能暴露，那属于三期。先在串行下把逻辑跑对，三期只需换掉 `tickAll` 的执行方式。
+
+### 验证
+
+- `./gradlew test`：**17 个单测全绿**（`GridRegionMapTest` 5 个 + `SerialRegionSchedulerTest` 12 个）。
+- 覆盖：负坐标切分、边界、单向访问不合并、直接双向合并、**间接三角环合并**、长链不误判、
+  合并幂等、合并后只 tick 代表一次、tick 顺序确定、停机。
+
+### 未做（2b）
+
+- `@Redirect` 接管 `tickChildren` 里对 `ServerLevel.tick` 的调用。
+- 一致性测试框架（同种子 + 同操作序列，每 tick 世界状态哈希）。
+
 ## 0.1.0 — 2026-11-14
 
 ### 新增

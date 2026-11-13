@@ -14,6 +14,9 @@ repositories {
 dependencies {
     // Mixin 注解处理器：生成 SRG refmap。
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 legacyForge {
@@ -72,6 +75,10 @@ legacyForge.runs.configureEach { run ->
         project.files(mixinConfigJar)
     )
     run.taskBefore(mixinConfigJar)
+}
+
+test {
+    useJUnitPlatform()
 }
 
 tasks.withType(JavaCompile).configureEach {

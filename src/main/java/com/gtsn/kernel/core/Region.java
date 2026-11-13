@@ -19,7 +19,7 @@ import java.util.List;
 public interface Region {
 
     /** region 的稳定标识（重启后按规则重新分配）。 */
-    int id();
+    RegionId id();
 
     /** 当前拥有这个 region 的线程；{@code null} 表示尚未启动。 */
     Thread owner();
