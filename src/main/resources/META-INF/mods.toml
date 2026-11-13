@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "LGPL-3.0"
+issueTrackerURL = "https://github.com/GregTech-Star-Navigation/GTSN-Kernel/issues"
+
+[[mods]]
+modId = "gtsnkernel"
+version = "${file.jarVersion}"
+displayName = "GTSN Kernel"
+description = '''
+Minecraft 原版 tick 主线程的可观测性与 region 化调度内核。
+
+一期：阶段级耗时 profiler —— 给 tickServer / tickChildren / ServerLevel.tick 的
+每个阶段打点，回答「那 50ms 花在哪」。不改变任何原版逻辑。
+'''
+
+[[dependencies.gtsnkernel]]
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.gtsnkernel]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.20.1,1.21)"
+ordering = "NONE"
+side = "BOTH"

@@ -1,0 +1,21 @@
+pluginManagement {
+    repositories {
+        maven { url = "https://maven.minecraftforge.net/" }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+        maven { url = "https://maven.minecraftforge.net/" }
+    }
+    versionCatalogs {
+        forge {
+            from(files("gradle/forge.versions.toml"))
+        }
+    }
+}
+
+rootProject.name = "gtsn-kernel"

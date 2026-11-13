@@ -1,0 +1,116 @@
+plugins {
+    id 'java-library'
+    alias forge.plugins.modDevGradle
+}
+
+group = maven_group
+version = "${mod_version}"
+
+repositories {
+    mavenCentral()
+    maven { url = "https://maven.minecraftforge.net/" }
+}
+
+dependencies {
+    // Mixin 注解处理器：生成 SRG refmap。
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+legacyForge {
+    version = forge.versions.minecraftForge.get()
+
+    parchment {
+        minecraftVersion = forge.versions.minecraft.get()
+        mappingsVersion = forge.versions.parchment.get()
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+
+    runs {
+        client {
+            client()
+            ideName = "Client"
+        }
+        server {
+            server()
+            ideName = "Server"
+            gameDirectory.set(file('run/server'))
+            programArgument '--nogui'
+            // 每 200 tick（10 秒）把阶段摘要写进日志：无人值守服务器看不了 /gtsnperf。
+            jvmArgument '-Dgtsnkernel.perf.logEvery=200'
+            jvmArgument '-Dgtsnkernel.perf.csv=true'
+        }
+    }
+}
+
+// Mixin 基础设施（照 GTSNLib 的做法）：
+// refmap 由注解处理器产出到 build/mixin/，config 在 dev 运行里通过一个独立小 jar 挂到
+// additionalRuntimeClasspath —— ModLauncher 的 union filesystem 只索引 classpath jar、
+// 不索引目录条目，所以 dev 下 Mixin 无法通过 --mixin.config 读到 mod 自己的配置。
+mixin {
+    add sourceSets.main, 'mixins.gtsnkernel.refmap.json'
+    config 'mixins.gtsnkernel.json'
+}
+
+def mixinConfigJar = tasks.register('mixinConfigJar', Jar) {
+    archiveClassifier = 'mixins'
+    destinationDirectory = layout.buildDirectory.dir('mixinjar')
+    from('src/main/resources/mixins.gtsnkernel.json')
+    from(layout.buildDirectory.dir('mixin')) {
+        include 'mixins.gtsnkernel.refmap.json'
+    }
+    dependsOn tasks.named('compileJava')
+}
+
+legacyForge.runs.configureEach { run ->
+    project.dependencies.add(
+        run.getAdditionalRuntimeClasspathConfiguration().name,
+        project.files(mixinConfigJar)
+    )
+    run.taskBefore(mixinConfigJar)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs << "-Xlint:-removal"
+}
+
+jar {
+    manifest {
+        attributes([
+            'Specification-Title'   : 'GTSN-Kernel',
+            'Specification-Vendor'  : 'GTSN',
+            'Specification-Version' : '1',
+            'Implementation-Title'  : 'GTSN-Kernel',
+            'Implementation-Version': project.version,
+            'Implementation-Vendor' : 'GTSN',
+            'MixinConfigs'          : 'mixins.gtsnkernel.json'
+        ])
+    }
+}
+
+// ── 运行时 JDK 开关 ────────────────────────────────────────────────────────────
+// 构建固定 JDK 21（Gradle 8.14 读不了 JDK 25 的 class 69）。
+// 运行时可切到 25：`./gradlew runServer -Pjdk25`。
+// 前置条件（未验证，二期 spike）：把 ASM 从 Forge 自带的 9.7.1 换到 9.10.1+，
+// 否则 ModLauncher 读到 JDK 25 的 class 69 会抛 Unsupported class file major version 69。
+if (project.hasProperty('jdk25')) {
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+    configurations.configureEach {
+        resolutionStrategy {
+            force 'org.ow2.asm:asm:9.10.1'
+            force 'org.ow2.asm:asm-tree:9.10.1'
+            force 'org.ow2.asm:asm-analysis:9.10.1'
+            force 'org.ow2.asm:asm-commons:9.10.1'
+            force 'org.ow2.asm:asm-util:9.10.1'
+        }
+    }
+}

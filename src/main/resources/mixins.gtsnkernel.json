@@ -1,0 +1,25 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.gtsn.kernel.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "mixins.gtsnkernel.refmap.json",
+  "mixins": [
+    "MinecraftServerMixin",
+    "ServerLevelMixin",
+    "ServerChunkCacheMixin",
+    "ChunkMapMixin",
+    "LevelTicksMixin",
+    "LevelMixin",
+    "EntityTickListMixin",
+    "RaidsMixin",
+    "ServerFunctionManagerMixin",
+    "PlayerListMixin",
+    "ServerConnectionListenerMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
