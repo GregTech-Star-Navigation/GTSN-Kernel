@@ -54,6 +54,9 @@ if [ ! -d "$BASE_WORLD" ]; then
   $RCON "fill -8 -60 -8 8 -60 8 minecraft:stone" > /dev/null 2>&1 || true
   # 用漏斗而不是箱子：箱子不注册 ticker，并行路径会拿到空列表，测了等于没测。
   $RCON "fill -8 -59 -8 8 -59 8 minecraft:hopper" > /dev/null 2>&1 || true
+  # 再加一层熔炉：熔炉是「零跨区块访问」的代表（实测 113288 次 tick 零失败），
+  # 用来验证白名单并行路径真的接管了 ticker —— 只有漏斗的话并行白名单是空的。
+  $RCON "fill -8 -58 -8 8 -58 8 minecraft:furnace" > /dev/null 2>&1 || true
   sleep 15
   bash tools/server-stop.sh
   cp -r run/server/world "$BASE_WORLD"
@@ -99,10 +102,21 @@ HASH_PARALLEL=$(read_hash || true)
 log "parallel: ${HASH_PARALLEL:-<空>}"
 bash tools/server-stop.sh
 
+log "=== 第四次：白名单并行（-PsafeTypes=minecraft:furnace）==="
+restore_world
+SERVER_LOG="$RESULT_DIR/safeparallel.log" bash tools/server-start.sh -PparallelBlocks=2 -PregionShift=1 -PsafeTypes=minecraft:furnace
+log "服务端已启动，等 RCON"
+wait_rcon
+log "RCON 就绪"
+sleep 15
+HASH_SAFEPARALLEL=$(read_hash || true)
+log "safeParallel: ${HASH_SAFEPARALLEL:-<空>}"
+bash tools/server-stop.sh
+
 echo ""
 echo "=== 结果 ==="
-if [ -n "$HASH_VANILLA" ] && [ "$HASH_VANILLA" = "$HASH_REGION" ] && [ "$HASH_VANILLA" = "$HASH_PARALLEL" ]; then
-  echo "PASS: 三条路径的世界状态一致"
+if [ -n "$HASH_VANILLA" ] && [ "$HASH_VANILLA" = "$HASH_REGION" ] && [ "$HASH_VANILLA" = "$HASH_PARALLEL" ] && [ "$HASH_VANILLA" = "$HASH_SAFEPARALLEL" ]; then
+  echo "PASS: 四条路径的世界状态一致"
   printf 'PASS\nvanilla=%s\nregion=%s\n' "$HASH_VANILLA" "$HASH_REGION" > "$RESULT_DIR/last-result.txt"
   exit 0
 else
@@ -110,6 +124,7 @@ else
   echo "  vanilla: ${HASH_VANILLA:-<空>}"
   echo "  region : ${HASH_REGION:-<空>}"
   echo "  parallel: ${HASH_PARALLEL:-<空>}"
+  echo "  safeParallel: ${HASH_SAFEPARALLEL:-<空>}"
   printf 'FAIL\nvanilla=%s\nregion=%s\n' "${HASH_VANILLA:-}" "${HASH_REGION:-}" > "$RESULT_DIR/last-result.txt"
   exit 1
 fi

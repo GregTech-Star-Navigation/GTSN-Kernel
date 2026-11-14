@@ -88,6 +88,11 @@ legacyForge {
             if (project.hasProperty('regionShift')) {
                 jvmArgument "-Dgtsnkernel.blocks.regionShift=${project.property('regionShift')}"
             }
+            // P2a 白名单：只有这些类型的方块实体会被丢到 lane 并行，其余留在主线程。
+            // 依据是实测（furnace 113288 次零失败 / hopper 3757 次失败）。
+            if (project.hasProperty('safeTypes')) {
+                jvmArgument "-Dgtsnkernel.blocks.safeTypes=${project.property('safeTypes')}"
+            }
         }
     }
 }

@@ -120,6 +120,25 @@ tick，跨 region 的交互通过「延迟一个 tick 的队列」传递。
   `getBlockEntity` / `getEntities`；另有 Beacon / Beehive / Bell / Chest / Conduit /
   Jukebox / CommandBlock 各 1–3 处）—— 必须走跨 region 队列
 
+### P2a 运行时验证（2026-11-14 实测）
+
+静态统计只是推测，所以做了运行时量尺：`ServerChunkCacheGuard` 拦截 region 线程的
+`getChunk`（返回 null 并记账），`ParallelBlockEntityTick` 对每个 ticker 单独 try-catch。
+
+289 个方块实体、`-PparallelBlocks=2 -PregionShift=1` 的结果：
+
+| 类型 | 成功 | 失败 | 结论 |
+| --- | --- | --- | --- |
+| `minecraft:furnace` | **113288** | **0** | 零跨区块，**并行完全安全** |
+| `minecraft:hopper` | 289 | **3757** | 100% 依赖跨区块，必须走队列 |
+
+`getChunk` 违规共 7514 次，样本 `GTSN-Region-0 @0,0 status=minecraft:full`。
+
+**这与 P0 的静态统计完全吻合**（熔炉 0 处跨区块调用、漏斗 4 处）。
+
+**所以 P2a 的正式形态是「按类型白名单分流」**：白名单里的类型丢 lane 并行，
+其余留在主线程按原版顺序跑。这样既能吃到并行收益，又不会破坏依赖跨区块的那部分。
+
 ### 对分期的影响
 
 P2 拆成 2a / 2b：

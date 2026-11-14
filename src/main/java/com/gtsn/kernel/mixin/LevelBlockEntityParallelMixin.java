@@ -1,6 +1,8 @@
 package com.gtsn.kernel.mixin;
 
 import com.gtsn.kernel.bridge.ParallelBlockEntityTick;
+import com.gtsn.kernel.bridge.RegionTickContext;
+import com.gtsn.kernel.core.RegionId;
 import com.gtsn.kernel.core.RegionThreadPool;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;

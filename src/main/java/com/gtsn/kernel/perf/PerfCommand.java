@@ -3,6 +3,8 @@ package com.gtsn.kernel.perf;
 import com.gtsn.kernel.core.ThreadGuard;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.gtsn.kernel.bridge.ParallelBlockEntityTick;
+import com.gtsn.kernel.bridge.RegionTickContext;
 import com.gtsn.kernel.bridge.WorldHasher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerLevel;
@@ -11,6 +13,7 @@ import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * {@code /gtsnperf} —— 阶段耗时报表。
@@ -35,6 +38,7 @@ public final class PerfCommand {
                 .then(Commands.literal("on").executes(context -> setEnabled(context, true)))
                 .then(Commands.literal("off").executes(context -> setEnabled(context, false)))
                 .then(Commands.literal("csv").executes(PerfCommand::toggleCsv))
+                .then(Commands.literal("regions").executes(PerfCommand::regions))
                 .then(Commands.literal("hash")
                         .executes(context -> hash(context, true))
                         .then(Commands.literal("blocks").executes(context -> hash(context, false)))));
@@ -105,6 +109,39 @@ public final class PerfCommand {
         reply(context, "[GTSN-Kernel] hash(" + kind + ")=" + Long.toHexString(value)
                 + " dim=" + level.dimension().location()
                 + " blocks=" + WorldHasher.countBlockEntities(level));
+        return 1;
+    }
+
+    /**
+     * region 线程的违规统计与方块实体并行结果（三期 P2a 的量尺）。
+     */
+    private static int regions(CommandContext<CommandSourceStack> context) {
+        long violations = RegionTickContext.violationCount();
+        java.util.Set<String> safe = ParallelBlockEntityTick.safeTypes();
+        reply(context, "  并行白名单: " + (safe.isEmpty() ? "（空，全部走主线程）" : safe));
+        reply(context, String.format(Locale.ROOT,
+                "[GTSN-Kernel] region 线程违规 %d 次%s", violations,
+                violations == 0 ? "（没有 region 线程做过阻塞式区块访问）" : ""));
+        RegionTickContext.violationBreakdown()
+                .forEach((kind, count) -> reply(context, "  " + pad(kind, 18) + count));
+        RegionTickContext.samples()
+                .forEach((kind, sample) -> reply(context, "  样本 " + kind + ": " + sample));
+
+        Map<String, Long> failures = ParallelBlockEntityTick.failureBreakdown();
+        Map<String, Long> successes = ParallelBlockEntityTick.successBreakdown();
+        if (failures.isEmpty() && successes.isEmpty()) {
+            reply(context, "  方块实体并行统计：尚无数据（未开启 -PparallelBlocks？）");
+            return 1;
+        }
+        reply(context, "  方块实体并行（成功 / 失败）：");
+        java.util.TreeSet<String> kinds = new java.util.TreeSet<>();
+        kinds.addAll(successes.keySet());
+        kinds.addAll(failures.keySet());
+        for (String kind : kinds) {
+            long ok = successes.getOrDefault(kind, 0L);
+            long bad = failures.getOrDefault(kind, 0L);
+            reply(context, "    " + pad(kind, 40) + ok + " / " + bad);
+        }
         return 1;
     }
 
