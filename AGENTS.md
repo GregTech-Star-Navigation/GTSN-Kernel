@@ -27,7 +27,9 @@ Minecraft 1.20.1（Forge 47.4.0）服务端 tick 内核。目标是把原版挤�
      （`MinecraftServerMixin`）。它必须保持「开关关闭时逐字节等价于原版」。
    - 再要加改变行为的注入，先写进 `docs/设计.md` 并补一致性测试。
 3. **profiler 零每 tick 分配**：`StageProfiler.begin/end` 路径上不许 new 对象。要加数据就扩预分配数组。
-4. **只采集主线程**：`StageProfiler` 用 `bindOwner` 过滤；多 region 之后要改成按 region 分桶，不是简单放开。
+4. **profiler 按线程分桶**：每个线程写自己的桶（上限 16，超出计数不静默丢）。
+   `begin/end` 路径上不许加锁、不许分配。环形缓冲的读取必须走 `sampleIndex()`
+   —— `head` 是「下一个写入位」，直接从它读会拿到未写槽位（曾经这么错过）。
 5. **`TickStage.key()` 是稳定契约**：CSV 列名依赖它，改名等于破坏下游脚本。要改就新增，不要重命名。
 6. **不要用 `RenderSystem.isOnGameThread()`**：1.20.1 里硬编码 `return true`，拿它当线程守卫等于没有守卫。用 `ThreadGuard`。
 

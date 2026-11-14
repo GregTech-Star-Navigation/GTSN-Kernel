@@ -46,9 +46,12 @@ public final class PerfCommand {
             reply(context, "[GTSN-Kernel] 尚无样本（服务器还没跑够一个 tick？）");
             return 0;
         }
+        int buckets = StageProfiler.bucketCount();
+        int dropped = StageProfiler.droppedThreads();
         reply(context, String.format(Locale.ROOT,
-                "GTSN-Kernel 阶段耗时 · 最近 %d tick · 单位 ms · 越界 %d 次",
-                tickCount, ThreadGuard.violationCount()));
+                "GTSN-Kernel 阶段耗时 · 最近 %d tick · 单位 ms · 越界 %d 次 · 采集桶 %d 线程%s",
+                tickCount, ThreadGuard.violationCount(), buckets,
+                dropped > 0 ? "（" + dropped + " 个线程超出上限未采集）" : ""));
         reply(context, pad("阶段", 22) + "     avg      p50      p99      max");
         for (TickStage stage : TickStage.ALL) {
             StageProfiler.Stats stats = StageProfiler.stats(stage);
