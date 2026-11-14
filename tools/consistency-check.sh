@@ -113,10 +113,21 @@ HASH_SAFEPARALLEL=$(read_hash || true)
 log "safeParallel: ${HASH_SAFEPARALLEL:-<空>}"
 bash tools/server-stop.sh
 
+log "=== 第五次：漏斗并行（-PsafeTypes=minecraft:hopper，走非阻塞快路径）==="
+restore_world
+SERVER_LOG="$RESULT_DIR/hopperparallel.log" bash tools/server-start.sh -PparallelBlocks=2 -PregionShift=1 -PsafeTypes=minecraft:hopper
+log "服务端已启动，等 RCON"
+wait_rcon
+log "RCON 就绪"
+sleep 15
+HASH_HOPPER=$(read_hash || true)
+log "hopperParallel: ${HASH_HOPPER:-<空>}"
+bash tools/server-stop.sh
+
 echo ""
 echo "=== 结果 ==="
-if [ -n "$HASH_VANILLA" ] && [ "$HASH_VANILLA" = "$HASH_REGION" ] && [ "$HASH_VANILLA" = "$HASH_PARALLEL" ] && [ "$HASH_VANILLA" = "$HASH_SAFEPARALLEL" ]; then
-  echo "PASS: 四条路径的世界状态一致"
+if [ -n "$HASH_VANILLA" ] && [ "$HASH_VANILLA" = "$HASH_REGION" ] && [ "$HASH_VANILLA" = "$HASH_PARALLEL" ] && [ "$HASH_VANILLA" = "$HASH_SAFEPARALLEL" ] && [ "$HASH_VANILLA" = "$HASH_HOPPER" ]; then
+  echo "PASS: 五条路径的世界状态一致"
   printf 'PASS\nvanilla=%s\nregion=%s\n' "$HASH_VANILLA" "$HASH_REGION" > "$RESULT_DIR/last-result.txt"
   exit 0
 else
@@ -125,6 +136,7 @@ else
   echo "  region : ${HASH_REGION:-<空>}"
   echo "  parallel: ${HASH_PARALLEL:-<空>}"
   echo "  safeParallel: ${HASH_SAFEPARALLEL:-<空>}"
+  echo "  hopperParallel: ${HASH_HOPPER:-<空>}"
   printf 'FAIL\nvanilla=%s\nregion=%s\n' "${HASH_VANILLA:-}" "${HASH_REGION:-}" > "$RESULT_DIR/last-result.txt"
   exit 1
 fi

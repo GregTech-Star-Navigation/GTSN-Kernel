@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.6.2 — 2026-11-14
+
+### 修复
+
+- **P2b 非阻塞快路径：漏斗从「100% 不可并行」变成「可并行」。**
+
+  P2a 时漏斗 3757 次失败，因为它每 tick 都查邻居。但那些邻居大多**就在同一个 region 里**
+  —— 只是守卫把**所有** `getChunk` 都拦掉了。
+
+  改成 region 线程先走非阻塞快路径：
+
+  ```java
+  ChunkHolder holder = chunkMap.getVisibleChunkIfPresent(ChunkPos.asLong(x, z));
+  if (holder != null && holder.getTickingChunk() != null) return chunk;  // 已加载
+  return null;                                                          // 未加载才记账
+  ```
+
+  `getVisibleChunkIfPresent` 只查一个 `ConcurrentHashMap`，不碰 `mainThreadProcessor`，
+  所以在工作线程上是安全的。
+
+  289 个漏斗实测：
+
+  | 指标 | P2a | P2b |
+  | --- | --- | --- |
+  | 漏斗成功 | 289 | **71382** |
+  | 漏斗失败 | 3757 | **1** |
+  | 非阻塞读成功 | 0 | **142767** |
+  | 违规 | 7514 | **0** |
+
+### 新增
+
+- `ChunkMapAccessor`：把 protected 的 `getVisibleChunkIfPresent` 暴露给 region 线程。
+- 一致性测试加第五场景（`-PsafeTypes=minecraft:hopper`），判据变成五条路径哈希全一致。
+
+### 说明
+
+P2a 的性能结论（p99 涨 818 倍）**没有被 P2b 改变** —— P2b 解决的是「能不能并行」
+（正确性），不是「并行值不值」。细粒度并行的调度开销仍然是负收益，要解决得重做调度层。
+
 ## 0.6.1 — 2026-11-14
 
 ### 实测：P2a 并行是负收益
