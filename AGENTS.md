@@ -4,9 +4,9 @@ Minecraft 1.20.1（Forge 47.4.0）服务端 tick 内核。目标是把原版挤�
 
 ## 当前阶段
 
-**一期（可观测性）已完成**；**二期 2a（region 切分 + 串行调度 + 依赖检测）已完成**，2b（接管原版 tick）未开始。
+**一期（可观测性）已完成**；**二期 2a（region 切分 + 串行调度 + 依赖检测）与 2b（接管原版 tick）已完成**。
 
-改代码前先看 `docs/设计.md` 的五期划分 —— **不要提前实现后面几期的东西**。`core` / `compat` / `gen` 三个包现在是骨架接口，没有实现。
+改代码前先看 `docs/设计.md` 的五期划分 —— **不要提前实现后面几期的东西**。`compat` / `gen` 两个包还是骨架接口，没有实现。
 
 ## 常用命令
 
@@ -21,7 +21,11 @@ Minecraft 1.20.1（Forge 47.4.0）服务端 tick 内核。目标是把原版挤�
 ## 硬约束
 
 1. **JDK**：构建固定 JDK 21（`gradle.properties` 的 `org.gradle.java.home`）。Gradle 8.14 不支持 JDK 25 —— 实测报 `Unsupported class file major version 69`。目标字节码 17。
-2. **Mixin 只做 HEAD/RETURN 插桩**：一期的所有注入点不得读参数、不得改返回值、不得 `cancel()`。任何会改变原版行为的注入都要先改 `docs/设计.md` 说明理由。
+2. **改变原版行为的注入必须先改设计文档**：
+   - 一期的 profiler 注入点只做 HEAD/RETURN 打点，不读参数、不改返回值、不 `cancel()`。
+   - 二期 2b 起有 **唯一一个** 改变调用路径的注入：`@Redirect` 接管 `ServerLevel.tick`
+     （`MinecraftServerMixin`）。它必须保持「开关关闭时逐字节等价于原版」。
+   - 再要加改变行为的注入，先写进 `docs/设计.md` 并补一致性测试。
 3. **profiler 零每 tick 分配**：`StageProfiler.begin/end` 路径上不许 new 对象。要加数据就扩预分配数组。
 4. **只采集主线程**：`StageProfiler` 用 `bindOwner` 过滤；多 region 之后要改成按 region 分桶，不是简单放开。
 5. **`TickStage.key()` 是稳定契约**：CSV 列名依赖它，改名等于破坏下游脚本。要改就新增，不要重命名。
@@ -33,13 +37,31 @@ Minecraft 1.20.1（Forge 47.4.0）服务端 tick 内核。目标是把原版挤�
 com.gtsn.kernel
 ├── GtsnKernel        入口
 ├── perf              一期：阶段 profiler（已实现）
-├── core              二期：region 切分 / 串行调度 / 依赖检测（2a 已实现）；ThreadGuard（已实现）
+├── core              二期：region 切分 / 串行调度 / 依赖检测（2a）；ThreadGuard
+├── bridge            二期 2b：tick 重定向目标 + 世界哈希（接触 MC，但不是 mixin）
 ├── compat            四期：规则表 / 探针 / 降级（骨架）
 ├── gen               五期：地形生成接口（骨架）
-└── mixin             唯一接触原版类的地方
+└── mixin             唯一写 Mixin 注解的地方
 ```
 
-**除 `mixin` 包外，其他包不得 import `net.minecraft.*`**（`GtsnKernel` 与 `ThreadGuard` 例外，它们需要 Forge 事件与线程引用）。
+**`mixin` 包只放 Mixin 类。** 别的类放进去会在运行时抛
+`IllegalClassLoadError: ... is in a defined mixin package ... and cannot be referenced directly`
+—— `mixins.gtsnkernel.json` 把整包声明为 mixin 包，包内非 mixin 类不能被普通代码引用。
+需要接触 `net.minecraft.*` 但不是 Mixin 的类放 `bridge`。
+
+**除 `mixin` / `bridge` 包外，其他包不得 import `net.minecraft.*`**（`GtsnKernel` 与
+`ThreadGuard` 例外，它们需要 Forge 事件与线程引用）。
+
+## 二期 2b 的验证方式
+
+```bash
+bash tools/consistency-check.sh      # 同一世界跑两次（原版 / 调度器），比对方块实体哈希
+```
+
+首次运行会自动建立基准世界（`build/world-base`）。判据是两行 `hash(blocks)` 完全相同。
+
+单独起停服务端用 `tools/server-start.sh` / `tools/server-stop.sh`，**不要 nohup 直接起**
+（stdin EOF 会让服务端秒停），也**不要强杀**（会搞坏 Gradle transform 缓存）。
 
 ## 禁区
 

@@ -3,7 +3,9 @@ package com.gtsn.kernel.perf;
 import com.gtsn.kernel.core.ThreadGuard;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.gtsn.kernel.bridge.WorldHasher;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
@@ -32,7 +34,10 @@ public final class PerfCommand {
                 .then(Commands.literal("reset").executes(PerfCommand::reset))
                 .then(Commands.literal("on").executes(context -> setEnabled(context, true)))
                 .then(Commands.literal("off").executes(context -> setEnabled(context, false)))
-                .then(Commands.literal("csv").executes(PerfCommand::toggleCsv)));
+                .then(Commands.literal("csv").executes(PerfCommand::toggleCsv))
+                .then(Commands.literal("hash")
+                        .executes(context -> hash(context, true))
+                        .then(Commands.literal("blocks").executes(context -> hash(context, false)))));
     }
 
     private static int report(CommandContext<CommandSourceStack> context) {
@@ -83,6 +88,21 @@ public final class PerfCommand {
             reply(context, "[GTSN-Kernel] CSV 打开失败: " + failure.getMessage());
             return 0;
         }
+    }
+
+    /**
+     * 世界状态哈希（二期 2b 一致性测试用）。
+     *
+     * <p>输出格式固定为 {@code hash=<hex> entities=<n>}，方便脚本比对两次运行。</p>
+     */
+    private static int hash(CommandContext<CommandSourceStack> context, boolean includeEntities) {
+        ServerLevel level = context.getSource().getLevel();
+        long value = WorldHasher.hash(level, includeEntities);
+        String kind = includeEntities ? "full" : "blocks";
+        reply(context, "[GTSN-Kernel] hash(" + kind + ")=" + Long.toHexString(value)
+                + " dim=" + level.dimension().location()
+                + " blocks=" + WorldHasher.countBlockEntities(level));
+        return 1;
     }
 
     private static void reply(CommandContext<CommandSourceStack> context, String message) {

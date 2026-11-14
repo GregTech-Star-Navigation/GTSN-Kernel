@@ -70,6 +70,11 @@ legacyForge {
             // 每 200 tick（10 秒）把阶段摘要写进日志：无人值守服务器看不了 /gtsnperf。
             jvmArgument '-Dgtsnkernel.perf.logEvery=200'
             jvmArgument '-Dgtsnkernel.perf.csv=true'
+            // 二期 2b：-PregionEnabled 让 ServerLevel.tick 走调度器路径（串行，并行度=1）。
+            // 默认关闭 = 原版 tick 路径。一致性测试靠它做两次运行对比。
+            if (project.hasProperty('regionEnabled')) {
+                jvmArgument '-Dgtsnkernel.region.enabled=true'
+            }
         }
     }
 }

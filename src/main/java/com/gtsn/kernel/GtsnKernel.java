@@ -2,6 +2,7 @@ package com.gtsn.kernel;
 
 import com.gtsn.kernel.core.ThreadGuard;
 import com.gtsn.kernel.perf.CsvRecorder;
+import com.gtsn.kernel.bridge.TickRedirectHandler;
 import com.gtsn.kernel.perf.PerfCommand;
 import com.gtsn.kernel.perf.StageProfiler;
 import com.mojang.logging.LogUtils;
@@ -45,6 +46,7 @@ public class GtsnKernel {
         Thread serverThread = event.getServer().getRunningThread();
         StageProfiler.bindOwner(serverThread);
         ThreadGuard.bindServerThread(serverThread);
+        TickRedirectHandler.bootstrap();
         LOGGER.info("[GTSN-Kernel] profiler bound to server thread '{}'", serverThread.getName());
         if (CsvRecorder.autoStartRequested()) {
             try {
@@ -53,6 +55,12 @@ public class GtsnKernel {
                 LOGGER.warn("[GTSN-Kernel] CSV 自动录制启动失败: {}", failure.getMessage());
             }
         }
+    }
+
+    /** 停机时让调度器收尾（二期 2b）。 */
+    @SubscribeEvent
+    public void onServerStopping(net.minecraftforge.event.server.ServerStoppingEvent event) {
+        TickRedirectHandler.shutdown();
     }
 
     @SubscribeEvent

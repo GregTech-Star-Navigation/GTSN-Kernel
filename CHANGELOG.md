@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0 — 2026-11-14
+
+### 新增
+
+- **二期 2b：`@Redirect` 接管 `ServerLevel.tick`。** `tickChildren` 里对 `ServerLevel.tick`
+  的调用转到 `bridge.TickRedirectHandler`，开关 `-PregionEnabled` 控制走调度器还是原版路径。
+  这是项目第一个改变原版调用路径的注入（之前全是 HEAD/RETURN 打点）。
+- `bridge` 包：放「需要接触 `net.minecraft.*` 但不属于 Mixin 注入」的类。
+  Mixin 配置把 `com.gtsn.kernel.mixin` 整包声明为 mixin 包，包内其他类不能被普通代码引用。
+- `WorldHasher`：方块实体 + 实体的状态哈希，一致性测试的比对依据。
+- `/gtsnperf hash [blocks]`：输出 `hash(blocks)=<hex> dim=<dim> blocks=<n>`。
+- `tools/consistency-check.sh` / `server-start.sh` / `server-stop.sh`：一致性测试与可靠启停。
+
+### 验证
+
+同一基准世界跑两次，两条路径结果完全一致：
+
+```
+vanilla: hash(blocks)=881bd189827a5eac blocks=293
+region : hash(blocks)=881bd189827a5eac blocks=293
+```
+
+调度器路径性能无退化（`server_tick` 0.666 ms，TPS 20.000）。
+
+### 修复
+
+- **哈希用了对象身份**：`BlockEntityType.hashCode()` / `EntityType.hashCode()` 没重写，
+  走 `Object.hashCode()`（内存地址），每次 JVM 启动都不同 —— 同一世界两次运行结果必然不同，
+  一致性测试会永远失败。改用注册名（`BuiltInRegistries.*.getKey(type)`）。
+- **`nohup` 启动服务端会立即停服**：`MinecraftServer` 的 console handler 从 stdin 读命令，
+  读到 EOF 就停（`Done` 同一秒 `Stopping server`）。重定向空文件也一样，必须是
+  `tail -f /dev/null |` 这种永不 EOF 的管道。
+
 ## 0.2.3 — 2026-11-14
 
 ### 性能
