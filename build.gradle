@@ -75,6 +75,19 @@ legacyForge {
             if (project.hasProperty('regionEnabled')) {
                 jvmArgument '-Dgtsnkernel.region.enabled=true'
             }
+            // 三期实验：方块实体 tick 按 region 并行。-PparallelBlocks[=N]
+            if (project.hasProperty('parallelBlocks')) {
+                jvmArgument '-Dgtsnkernel.blocks.parallel=true'
+                def lanes = project.property('parallelBlocks')
+                if (lanes != null && lanes.toString().isInteger()) {
+                    jvmArgument "-Dgtsnkernel.blocks.parallelism=${lanes}"
+                }
+            }
+            // 并行分区的粒度：区块坐标右移几位算一个 region（4 = 16×16 区块，1 = 2×2 区块）。
+            // 测试场地跨度小时要调小，否则只有一个 region，「并行」退化成单 lane。
+            if (project.hasProperty('regionShift')) {
+                jvmArgument "-Dgtsnkernel.blocks.regionShift=${project.property('regionShift')}"
+            }
         }
     }
 }

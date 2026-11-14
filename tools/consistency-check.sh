@@ -52,7 +52,8 @@ if [ ! -d "$BASE_WORLD" ]; then
   wait_rcon
   $RCON "forceload add -4 -4 4 4" > /dev/null 2>&1 || true
   $RCON "fill -8 -60 -8 8 -60 8 minecraft:stone" > /dev/null 2>&1 || true
-  $RCON "fill -8 -59 -8 8 -59 8 minecraft:chest" > /dev/null 2>&1 || true
+  # 用漏斗而不是箱子：箱子不注册 ticker，并行路径会拿到空列表，测了等于没测。
+  $RCON "fill -8 -59 -8 8 -59 8 minecraft:hopper" > /dev/null 2>&1 || true
   sleep 15
   bash tools/server-stop.sh
   cp -r run/server/world "$BASE_WORLD"
@@ -85,16 +86,30 @@ HASH_REGION=$(read_hash || true)
 log "region : ${HASH_REGION:-<空>}"
 bash tools/server-stop.sh
 
+log "=== 第三次：方块实体并行（-PparallelBlocks=2）==="
+restore_world
+# regionShift=1：2×2 区块算一个 region。测试场地跨度 17 区块，这样才切得出多个 region，
+  # 否则「并行」只会有 1 条 lane 有活干。
+  SERVER_LOG="$RESULT_DIR/parallel.log" bash tools/server-start.sh -PparallelBlocks=2 -PregionShift=1
+log "服务端已启动，等 RCON"
+wait_rcon
+log "RCON 就绪"
+sleep 15
+HASH_PARALLEL=$(read_hash || true)
+log "parallel: ${HASH_PARALLEL:-<空>}"
+bash tools/server-stop.sh
+
 echo ""
 echo "=== 结果 ==="
-if [ -n "$HASH_VANILLA" ] && [ "$HASH_VANILLA" = "$HASH_REGION" ]; then
-  echo "PASS: 两条路径的世界状态一致"
+if [ -n "$HASH_VANILLA" ] && [ "$HASH_VANILLA" = "$HASH_REGION" ] && [ "$HASH_VANILLA" = "$HASH_PARALLEL" ]; then
+  echo "PASS: 三条路径的世界状态一致"
   printf 'PASS\nvanilla=%s\nregion=%s\n' "$HASH_VANILLA" "$HASH_REGION" > "$RESULT_DIR/last-result.txt"
   exit 0
 else
   echo "FAIL: 世界状态不一致"
   echo "  vanilla: ${HASH_VANILLA:-<空>}"
   echo "  region : ${HASH_REGION:-<空>}"
+  echo "  parallel: ${HASH_PARALLEL:-<空>}"
   printf 'FAIL\nvanilla=%s\nregion=%s\n' "${HASH_VANILLA:-}" "${HASH_REGION:-}" > "$RESULT_DIR/last-result.txt"
   exit 1
 fi

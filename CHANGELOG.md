@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.0 — 2026-11-14
+
+### 新增
+
+- `RegionThreadPool`：把 region 稳定绑定到固定 lane（`hash(regionId) % parallelism`），
+  保证同一 region 的两次 tick 落在同一线程 —— 这是「region 内串行」的前提。
+- `ParallelBlockEntityTick`：`tickBlockEntities` 的 tick 循环按 region 分组并行分组逻辑。
+- `-PparallelBlocks[=N]` / `-PregionShift=S`：实验开关。
+- `tools/consistency-check.sh` 加第三个场景（并行路径），判据变成三条路径哈希全部一致。
+
+### 负结果：方块实体并行会死锁（这条路走不通）
+
+实测（289 个漏斗，`-PparallelBlocks=2 -PregionShift=1`）：服务端第一 tick 卡死，
+RCON 无响应，只能强杀。
+
+根因是原版线程模型的硬约束，不是实现 bug：
+
+```
+主线程                          GTSN-Region-0
+  allOf(futures).join()  ←──等待──  ticker.tick() → level.getChunk()
+                                     └─ ServerChunkCache.getChunk()
+                                        非主线程 → supplyAsync(..., mainThreadProcessor).join()
+```
+
+`ServerChunkCache.getChunk` 在非主线程会阻塞并把活转交主线程，而主线程正在等它。
+
+**结论**：三期不是「把循环并行」，而是「让每个 region 拥有自己的区块存储与调度队列」
+（Folia 那套，region 之间并行但不并发）。量级是数月。
+
+代码保留并标注为「记录的死路」—— 分组逻辑和 `RegionThreadPool` 在四期仍有价值。
+默认关闭，不影响任何正常路径。
+
+### 修正
+
+- 一致性测试的基准世界从箱子改成**漏斗**。箱子不注册 `TickingBlockEntity`，
+  并行路径拿到的是空列表 —— 用箱子测并行等于没测（第一次「PASS」是假阳性）。
+
 ## 0.4.0 — 2026-11-14
 
 ### 新增

@@ -31,7 +31,11 @@ Minecraft 1.20.1（Forge 47.4.0）服务端 tick 内核。目标是把原版挤�
    `begin/end` 路径上不许加锁、不许分配。环形缓冲的读取必须走 `sampleIndex()`
    —— `head` 是「下一个写入位」，直接从它读会拿到未写槽位（曾经这么错过）。
 5. **`TickStage.key()` 是稳定契约**：CSV 列名依赖它，改名等于破坏下游脚本。要改就新增，不要重命名。
-6. **不要用 `RenderSystem.isOnGameThread()`**：1.20.1 里硬编码 `return true`，拿它当线程守卫等于没有守卫。用 `ThreadGuard`。
+6. **不要在任何非主线程调用 `level.getChunk` / `getChunkNow` / 方块实体 tick**：
+   `ServerChunkCache.getChunk` 在非主线程会 `supplyAsync(..., mainThreadProcessor).join()`
+   把活转交主线程，主线程若正在等这个工作线程 → **死锁**（2026-11-14 实测，整服卡死）。
+   三期「方块实体按 region 并行」就是撞在这条上（见 `docs/设计.md`）。
+7. **不要用 `RenderSystem.isOnGameThread()`**：1.20.1 里硬编码 `return true`，拿它当线程守卫等于没有守卫。用 `ThreadGuard`。
 
 ## 包结构
 
