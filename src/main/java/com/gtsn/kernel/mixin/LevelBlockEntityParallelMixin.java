@@ -2,6 +2,8 @@ package com.gtsn.kernel.mixin;
 
 import com.gtsn.kernel.bridge.ParallelBlockEntityTick;
 import com.gtsn.kernel.bridge.RegionTickContext;
+import com.gtsn.kernel.perf.StageProfiler;
+import com.gtsn.kernel.perf.TickStage;
 import com.gtsn.kernel.core.RegionId;
 import com.gtsn.kernel.core.RegionThreadPool;
 import net.minecraft.world.level.Level;
@@ -116,6 +118,9 @@ public abstract class LevelBlockEntityParallelMixin {
         Level level = (Level) (Object) this;
         var profiler = level.getProfiler();
         profiler.push("blockEntities");
+        // 自己的 profiler 打点：本方法 cancel 之后 LevelMixin 的 RETURN 注入不会跑，
+        // 不在这里手动记的话 block_entities 阶段在并行模式下永远是 0 样本。
+        StageProfiler.begin(TickStage.BLOCK_ENTITIES);
         try {
             // ---- 以下按原版顺序重放，只有最后的 tick 循环换成并行 ----
             if (!this.pendingFreshBlockEntities.isEmpty()) {
@@ -148,6 +153,7 @@ public abstract class LevelBlockEntityParallelMixin {
                 this.blockEntityTickers.addAll(survivors);
             }
         } finally {
+            StageProfiler.end(TickStage.BLOCK_ENTITIES);
             this.tickingBlockEntities = false;
             profiler.pop();
         }

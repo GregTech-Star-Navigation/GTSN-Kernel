@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.6.1 — 2026-11-14
+
+### 实测：P2a 并行是负收益
+
+289 个正在烧的熔炉，`block_entities` 阶段：
+
+| 模式 | avg | p50 | p99 | max |
+| --- | --- | --- | --- | --- |
+| 串行 | 0.375 | 0.368 | 0.553 | 1.061 |
+| 并行 | 109.245 | 0.450 | 449.972 | 3370.579 |
+
+**p50 差不多，p99 涨 818 倍。** 每 tick 唤醒 lane 线程 + `allOf().join()` 等最慢的
+那个，而 289 个熔炉总工作量只有 0.375ms，抵不掉调度开销。
+
+正确性没问题（四条路径哈希一致、零违规），是**性能不可用**。
+
+### 修复
+
+- **并行路径的 profiler 打点**：`LevelBlockEntityParallelMixin` 用 `ci.cancel()` 之后，
+  `LevelMixin` 的 RETURN 注入不会执行，`block_entities` 在并行模式下永远是 0 样本。
+  在并行路径里手动 `StageProfiler.begin/end`。
+- **统计从 `ConcurrentHashMap` + `AtomicLong` 换 `LongAdder`**：第一版每个 ticker 每 tick
+  一次 `computeIfAbsent` + `incrementAndGet`，把 0.343ms 顶到 110.681ms（慢 322 倍）——
+  测量工具自己成了瓶颈。
+
+### 新增
+
+- `tools/parallel-benchmark.sh`：装满矿石与煤炭、让熔炉真的在烧，对比串行/并行的
+  `block_entities` 分布。
+
 ## 0.6.0 — 2026-11-14
 
 ### 文档
