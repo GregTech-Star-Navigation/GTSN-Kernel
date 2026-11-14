@@ -170,6 +170,35 @@ tick，跨 region 的交互通过「延迟一个 tick 的队列」传递。
 
 三条都属于「重做调度层」，不是 P2a 的调整能覆盖的。
 
+### P2b：非阻塞快路径救回漏斗（2026-11-14）
+
+P2a 时漏斗 3757 次失败，因为它每个 tick 都查邻居。但那些邻居**大部分就在同一个 region 里**
+—— 只是守卫把**所有** `getChunk` 都拦掉了。
+
+修法：region 线程上不再一律拦截，而是先走**非阻塞快路径**：
+
+```java
+ChunkHolder holder = chunkMap.getVisibleChunkIfPresent(ChunkPos.asLong(x, z));
+if (holder != null && holder.getTickingChunk() != null) {
+    return chunk;          // 已加载 → 直接给，不转交主线程、不阻塞
+}
+return null;               // 未加载 → 记账后返回 null
+```
+
+`getVisibleChunkIfPresent` 只查一个 `ConcurrentHashMap`，不碰 `mainThreadProcessor`，
+所以它在工作线程上是安全的。
+
+289 个漏斗的结果：
+
+| 指标 | P2a（一律拦截） | P2b（快路径） |
+| --- | --- | --- |
+| 漏斗成功 | 289 | **71382** |
+| 漏斗失败 | 3757 | **1** |
+| 非阻塞读成功 | 0 | **142767** |
+| 违规 | 7514 | **0** |
+
+**漏斗从「100% 不可并行」变成「可并行，1 次边界失败」。**
+
 ### 对分期的影响
 
 P2 拆成 2a / 2b：

@@ -1,10 +1,15 @@
 package com.gtsn.kernel.mixin;
 
 import com.gtsn.kernel.bridge.RegionTickContext;
+import net.minecraft.server.level.ChunkHolder;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.LevelChunk;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -28,6 +33,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ServerChunkCache.class)
 public abstract class ServerChunkCacheGuard {
 
+    @Shadow
+    @Final
+    public ChunkMap chunkMap;
+
     @Inject(method = "getChunk(IILnet/minecraft/world/level/chunk/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
             at = @At("HEAD"), cancellable = true)
     private void gtsnkernel$guardGetChunk(int chunkX, int chunkZ, ChunkStatus requiredStatus, boolean load,
@@ -35,9 +44,30 @@ public abstract class ServerChunkCacheGuard {
         if (!RegionTickContext.inRegionThread()) {
             return;
         }
-        RegionTickContext.recordViolation("getChunk",
+
+        // ── P2b：先试「非阻塞快路径」──
+        // 原版 getChunk 在非主线程会 supplyAsync(..., mainThreadProcessor).join() 转交主线程，
+        // 主线程此刻正在等我们 → 死锁。但「区块已加载」这件事本身是可以在工作线程读的
+        // （getVisibleChunkIfPresent 只查一个 ConcurrentHashMap，不阻塞）。
+        //
+        // 所以：已加载的区块正常返回，未加载的才记账并返回 null。
+        // 这一步让 region 线程能读自己 region 里的邻居 —— 漏斗查隔壁箱子就是这条路。
+        ChunkHolder holder = ((ChunkMapAccessor) (Object) this.chunkMap)
+                .gtsnkernel$getVisibleChunkIfPresent(
+                        net.minecraft.world.level.ChunkPos.asLong(chunkX, chunkZ));
+        if (holder != null) {
+            LevelChunk chunk = requiredStatus == ChunkStatus.FULL
+                    ? holder.getTickingChunk()
+                    : holder.getFullChunk();
+            if (chunk != null) {
+                RegionTickContext.recordFastPath();
+                cir.setReturnValue(chunk);
+                return;
+            }
+        }
+
+        RegionTickContext.recordViolation("getChunk-miss",
                 Thread.currentThread().getName() + " @" + chunkX + "," + chunkZ + " status=" + requiredStatus);
-        // 返回 null 而不是阻塞转交：让调用方在这个 ticker 上失败，而不是整个服务器卡死。
         cir.setReturnValue(null);
     }
 }

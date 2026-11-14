@@ -120,7 +120,8 @@ public final class PerfCommand {
         java.util.Set<String> safe = ParallelBlockEntityTick.safeTypes();
         reply(context, "  并行白名单: " + (safe.isEmpty() ? "（空，全部走主线程）" : safe));
         reply(context, String.format(Locale.ROOT,
-                "[GTSN-Kernel] region 线程违规 %d 次%s", violations,
+                "[GTSN-Kernel] region 线程：非阻塞读成功 %d 次，违规 %d 次%s",
+                RegionTickContext.fastPathCount(), violations,
                 violations == 0 ? "（没有 region 线程做过阻塞式区块访问）" : ""));
         RegionTickContext.violationBreakdown()
                 .forEach((kind, count) -> reply(context, "  " + pad(kind, 18) + count));

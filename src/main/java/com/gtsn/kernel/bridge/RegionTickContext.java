@@ -7,10 +7,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 「当前线程正在 tick 哪个 region」（三期 P2a）。
+ * 「当前线程正在 tick 哪个 region」（三期）。
  *
- * <p>它的用途只有一个：让 {@link ServerChunkCacheGuard} 能区分「主线程的正常访问」和
- * 「region 线程的危险访问」。前者放行，后者拦截并记账。</p>
+ * <p>用途只有一个：让 {@code ServerChunkCacheGuard} 能区分「主线程的正常访问」和
+ * 「region 线程的危险访问」。前者放行，后者走非阻塞快路径或拦截记账。</p>
  *
  * <p><b>为什么用 ThreadLocal 而不是传参</b>：调用链太深（tick → ticker → blockEntity →
  * level.getChunk），中间隔着几百个原版方法，没有地方可以安全地加一个 region 参数。</p>
@@ -20,19 +20,24 @@ public final class RegionTickContext {
     /** 当前线程正在 tick 的 region；主线程为 null。 */
     private static final ThreadLocal<RegionId> CURRENT = new ThreadLocal<>();
 
-    /** 被拦截的危险调用次数（按调用点分类）。 */
+    /** 非阻塞快路径成功的次数（P2b 关键指标：多少跨区块读取被安全满足）。 */
+    private static final AtomicLong FAST_PATH = new AtomicLong();
+
+    /** 被拦截的危险调用次数（按调用类型分类）。 */
     private static final Map<String, AtomicLong> VIOLATIONS = new ConcurrentHashMap<>();
 
-    /** 最近一次违规的样本描述（给报告看，不保留全部，避免内存膨胀）。 */
+    /** 每类违规的第一个样本（给报告看，不保留全部）。 */
     private static final Map<String, String> SAMPLES = new ConcurrentHashMap<>();
 
     private RegionTickContext() {
     }
 
+    /** 进入 region 上下文。 */
     public static void enter(RegionId region) {
         CURRENT.set(region);
     }
 
+    /** 退出 region 上下文。 */
     public static void exit() {
         CURRENT.remove();
     }
@@ -47,10 +52,20 @@ public final class RegionTickContext {
         return CURRENT.get() != null;
     }
 
+    /** 记一次「非阻塞读成功」。 */
+    public static void recordFastPath() {
+        FAST_PATH.incrementAndGet();
+    }
+
+    /** 非阻塞读成功的总次数。 */
+    public static long fastPathCount() {
+        return FAST_PATH.get();
+    }
+
     /**
      * 记录一次「region 线程做了不该做的区块访问」。
      *
-     * @param kind   调用类型（{@code getChunk} / {@code getChunkBlocking} …）
+     * @param kind   调用类型（{@code getChunk-miss} …）
      * @param detail 出事的坐标或线程名
      */
     public static void recordViolation(String kind, String detail) {
@@ -67,7 +82,7 @@ public final class RegionTickContext {
         return total;
     }
 
-    /** 按类型的违规明细（报告用）。 */
+    /** 按类型的违规明细。 */
     public static Map<String, Long> violationBreakdown() {
         Map<String, Long> result = new java.util.LinkedHashMap<>();
         VIOLATIONS.forEach((kind, counter) -> result.put(kind, counter.get()));
@@ -79,8 +94,10 @@ public final class RegionTickContext {
         return Map.copyOf(SAMPLES);
     }
 
+    /** 清零所有计数。 */
     public static void reset() {
         VIOLATIONS.clear();
         SAMPLES.clear();
+        FAST_PATH.set(0L);
     }
 }
