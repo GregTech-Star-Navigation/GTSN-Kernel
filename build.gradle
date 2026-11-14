@@ -97,6 +97,16 @@ legacyForge {
             if (project.hasProperty('spin')) {
                 jvmArgument '-Dgtsnkernel.blocks.spin=true'
             }
+            // 模块化开关：-Pmodules=raids=false,weather=false
+            // 默认全开 = 原版行为。关掉某个模块就是跳过那个阶段。
+            if (project.hasProperty('modules')) {
+                project.property('modules').toString().split(',').each { pair ->
+                    def parts = pair.split('=')
+                    if (parts.length == 2) {
+                        jvmArgument "-Dgtsnkernel.modules.${parts[0].trim()}=${parts[1].trim()}"
+                    }
+                }
+            }
         }
     }
 }

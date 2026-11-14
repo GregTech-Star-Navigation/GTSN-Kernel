@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.8.0 — 2026-11-14
+
+### 新增
+
+- **原版 tick 拆成可拆卸模块。** `ServerLevel.tick` 的 11 个阶段现在每个都能单独关掉，
+  而方法骨架、执行顺序、局部变量全部保持原版。
+
+  做法：不重写 `tick`，只用 `@Redirect` 把每个阶段的调用点换成「先问开关、再决定调不调」。
+  开关是 `-Pmodules=time=false,weather=false`，默认全开 = 原版行为。
+
+  已拆出：`worldBorder` / `weather` / `skyBrightness` / `time` / `raids` / `chunkSource` /
+  `blockEvents` / `dragonFight` / `blockEntities` / `entityManagement`。
+
+- `TickModules`：模块枚举 + 开关表（`gtsnkernel.modules.<name>`）。
+- `ServerLevelModuleMixin` / `ServerLevelInvoker` / `LevelInvoker`。
+
+### 验证
+
+**决定性证据**：
+
+```
+-Pmodules=time=false
+→ time query gametime = 37804
+→ 5 秒后（100 tick）= 37804     ← 完全冻结
+```
+
+`tickTime()` 确实被跳过了。全开时服务端正常（`Done (4.237s)`，profiler 有数据）。
+
+### 踩到的三个坑
+
+1. **`@Shadow` 不找继承来的方法**：`tickBlockEntities()` 定义在 `Level` 上，在
+   `@Mixin(ServerLevel.class)` 里 shadow 会报 "was not located in the target class"。
+   要用 `@Mixin(Level.class)` 的 `@Invoker`。
+2. **`@Invoker` 必须真的注册进 json**：漏了会在**运行期**抛
+   `IllegalClassLoadError: Illegal classload request for accessor mixin ...`，不是编译期。
+3. **private 方法用 `@Invoker`，protected 才能 `@Shadow`**。
+
 ## 0.7.2 — 2026-11-14
 
 ### 验证：GTCEu 在 JDK 25 下正常

@@ -5,6 +5,9 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "mixins.gtsnkernel.refmap.json",
   "mixins": [
+    "LevelInvoker",
+    "ServerLevelInvoker",
+    "ServerLevelModuleMixin",
     "LevelEntityQueryMixin",
     "GoalSelectorMixin",
     "ChunkMapAccessor",
