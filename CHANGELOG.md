@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.1 — 2026-11-14
+
+### 验证：JDK 25 可以跑 MC 1.20.1
+
+之前调研的结论是「Forge 1.20.1 栈最高认 class 68（ASM 9.7.1），JDK 25 是 69，所以要跑 25
+必须重写加载器（ModLauncher 10→11、securejarhandler 2→3）」。**这个结论不完整** ——
+只要把 ASM 换掉就够，不用重写加载器。
+
+`build.gradle` 里早就有 `-Pjdk25` 开关（toolchain 25 + 强制 ASM 9.10.1），注释写「未验证」。
+实测：
+
+```
+./gradlew runServer -Pjdk25
+→ java version 25.0.4.1 by Eclipse Adoptium
+→ Done (3.104s)!
+```
+
+**能跑，而且正常。**
+
+原因：Mixin 0.8.5 不重打包 ASM，用的是 classpath 上那份；Forge 自带的 9.7.1 只到 class 68，
+换 9.10.1 后能读 69。AT 8.0.4 / ModLauncher 10 用的都是 9.x 老 API，向后兼容。
+
+**性能（200 僵尸，同场景）**：
+
+| JDK | server_tick avg | p50 | p99 | max |
+| --- | --- | --- | --- | --- |
+| 17 | 1.162 | 1.055 | 1.838 | 11.276 |
+| **25** | **1.103** | 1.044 | **1.741** | **5.277** |
+
+avg / p99 各降约 5%，**max 降 53%**。
+
+未验证：GTCEu 等 mod 在 25 上的兼容性、长时间稳定性。
+
 ## 0.7.0 — 2026-11-14
 
 ### 新增

@@ -24,7 +24,10 @@ Minecraft 1.20.1（Forge 47.4.0）服务端 tick 内核。目标是把原版挤�
 
 ## 硬约束
 
-1. **JDK**：构建固定 JDK 21（`gradle.properties` 的 `org.gradle.java.home`）。Gradle 8.14 不支持 JDK 25 —— 实测报 `Unsupported class file major version 69`。目标字节码 17。
+1. **JDK**：构建固定 JDK 21（`gradle.properties` 的 `org.gradle.java.home`，Gradle 8.14 读不了
+   JDK 25 的 class 69）。**运行时可以切到 25**：`./gradlew runServer -Pjdk25`
+   （toolchain 25 + 强制 ASM 9.10.1）—— 2026-11-14 实测能正常起服，max tick 时间减半。
+   默认仍是 17。
 2. **改变原版行为的注入必须先改设计文档**：
    - 一期的 profiler 注入点只做 HEAD/RETURN 打点，不读参数、不改返回值、不 `cancel()`。
    - 二期 2b 起有 **唯一一个** 改变调用路径的注入：`@Redirect` 接管 `ServerLevel.tick`
