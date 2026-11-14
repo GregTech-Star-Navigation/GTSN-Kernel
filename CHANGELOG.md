@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.2 — 2026-11-14
+
+### 验证：GTCEu 在 JDK 25 下正常
+
+`-PwithGtceu -Pjdk25` 实测：
+
+```
+java version 25.0.4.1 by Eclipse Adoptium
+GregTechCEu is initializing...
+Done (2.964s)!
+```
+
+41 台 `gtceu:lv_macerator` 放下后正常 tick，`server_tick` 1.047ms，TPS 20.000，无异常。
+
+**JDK 25 现在可以上生产了** —— 原版 tick 与 GTCEu 都验过。
+
+未验证：长时间稳定性（> 10 分钟）、其他 mod、客户端。
+
 ## 0.7.1 — 2026-11-14
 
 ### 验证：JDK 25 可以跑 MC 1.20.1
