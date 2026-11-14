@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.0 — 2026-11-14
+
+### 文档
+
+- 新增 `docs/requirements/REQ-001-region-owned-chunks.md`：region 拥有独立区块存储的
+  完整需求边界、五期分解、逐期可执行验收、风险表。
+- 完成 P0 量化（从 `forge-1.20.1-47.4.0-sources.jar` 统计）：
+
+  **决定性事实**：`ServerChunkCache.getChunk` 在非主线程会 `supplyAsync(..., mainThreadProcessor).join()`
+  转交主线程（死锁），而 `getChunkNow` 在非主线程直接返回 `null`（安全降级）。
+
+  **跨区块访问密度**：方块实体 40 处、实体 9 处 —— 量级是几十处，不是几百处。
+
+  **关键分化**：`AbstractFurnaceBlockEntity` 零跨区块访问（可直接并行），
+  `HopperBlockEntity` 4 处全查邻居（必须走队列）。
+
+  因此 P2 拆成 2a（只并行零依赖的那类）与 2b（碰邻居的走队列）。可行性判断：
+  值得做，但 P1 的所有权断言仍是必须的前置。
+
 ## 0.5.0 — 2026-11-14
 
 ### 新增
