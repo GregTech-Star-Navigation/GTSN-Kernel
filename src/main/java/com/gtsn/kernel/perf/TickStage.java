@@ -32,6 +32,10 @@ public enum TickStage {
     RAIDS("raids", "袭击", 3),
     /** 实体 tick（{@code EntityTickList.forEach}）—— 通常是最重的一段。 */
     ENTITIES("entities", "实体", 3),
+    /** 实体 AI：`GoalSelector.tick()` 里的判定与执行（含 canUse / canContinueToUse / tick）。 */
+    ENTITY_AI("entity_ai", "  实体 AI", 4),
+    /** 实体 AI 里的空间查询：`Level.getEntities` 系列（原版已有 section 索引，这里量它的实际占比）。 */
+    ENTITY_QUERY("entity_query", "  实体查询", 4),
     /** 方块实体 tick（{@code Level.tickBlockEntities}）。 */
     BLOCK_ENTITIES("block_entities", "方块实体", 3),
     /** 实体分区管理（{@code PersistentEntitySectionManager.tick}）。 */
