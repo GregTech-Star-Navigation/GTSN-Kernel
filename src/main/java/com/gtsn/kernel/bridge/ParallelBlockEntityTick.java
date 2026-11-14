@@ -131,6 +131,89 @@ public final class ParallelBlockEntityTick {
         }
     }
 
+    /** 忙等池（P2c）：与 {@link java.util.concurrent.ExecutorService} 版本并存，靠开关选。 */
+    private static volatile com.gtsn.kernel.core.SpinLanePool spinPool;
+
+    private static com.gtsn.kernel.core.SpinLanePool spinPool(int parallelism) {
+        com.gtsn.kernel.core.SpinLanePool pool = spinPool;
+        if (pool == null) {
+            synchronized (ParallelBlockEntityTick.class) {
+                pool = spinPool;
+                if (pool == null) {
+                    pool = new com.gtsn.kernel.core.SpinLanePool(parallelism);
+                    spinPool = pool;
+                }
+            }
+        }
+        return pool;
+    }
+
+    /**
+     * 忙等池版本：没有 future、没有线程唤醒，提交后自旋等计数归零（P2c）。
+     *
+     * <p>与 {@link #tick} 的区别只在「怎么等」：那边是 {@code CompletableFuture.allOf().join()}，
+     * 这边是 {@code pending.decrementAndGet()} 归零。任务分组、白名单、try-catch 全一样。</p>
+     */
+    public static List<TickingBlockEntity> tickWithSpin(
+            List<TickingBlockEntity> tickers,
+            int parallelism,
+            int regionShift,
+            Predicate<BlockPos> shouldTick) {
+
+        List<TickingBlockEntity> survivors = new ArrayList<>(tickers.size());
+        List<TickingBlockEntity> serial = new ArrayList<>();
+        List<List<TickingBlockEntity>> groups = new ArrayList<>(parallelism);
+        for (int i = 0; i < parallelism; i++) {
+            groups.add(new ArrayList<>());
+        }
+        for (TickingBlockEntity ticker : tickers) {
+            if (ticker.isRemoved()) {
+                continue;
+            }
+            survivors.add(ticker);
+            if (!isSafe(ticker.getType())) {
+                serial.add(ticker);
+                continue;
+            }
+            BlockPos pos = ticker.getPos();
+            int lane = Math.floorMod((pos.getX() >> 4 >> regionShift) * 31
+                    + (pos.getZ() >> 4 >> regionShift), parallelism);
+            groups.get(lane).add(ticker);
+        }
+
+        for (TickingBlockEntity ticker : serial) {
+            tickSafely(ticker, shouldTick);
+        }
+        if (parallelism == 1) {
+            for (TickingBlockEntity ticker : groups.get(0)) {
+                tickSafely(ticker, shouldTick);
+            }
+            return survivors;
+        }
+
+        List<Runnable> tasks = new ArrayList<>(parallelism);
+        for (int lane = 0; lane < parallelism; lane++) {
+            final List<TickingBlockEntity> group = groups.get(lane);
+            final int laneIndex = lane;
+            if (group.isEmpty()) {
+                tasks.add(null);
+                continue;
+            }
+            tasks.add(() -> {
+                RegionTickContext.enter(new com.gtsn.kernel.core.RegionId(laneIndex, 0));
+                try {
+                    for (TickingBlockEntity ticker : group) {
+                        tickSafely(ticker, shouldTick);
+                    }
+                } finally {
+                    RegionTickContext.exit();
+                }
+            });
+        }
+        spinPool(parallelism).runAll(tasks);
+        return survivors;
+    }
+
     /**
      * 并行跑 tick 循环。
      *

@@ -93,6 +93,10 @@ legacyForge {
             if (project.hasProperty('safeTypes')) {
                 jvmArgument "-Dgtsnkernel.blocks.safeTypes=${project.property('safeTypes')}"
             }
+            // P2c：用忙等 lane 池替代 CompletableFuture（省掉线程唤醒，代价是常驻 CPU）。
+            if (project.hasProperty('spin')) {
+                jvmArgument '-Dgtsnkernel.blocks.spin=true'
+            }
         }
     }
 }

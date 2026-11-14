@@ -22,8 +22,8 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
 
-# 熔炉铺在 y=-59，17×17 = 289 个（与一致性测试同尺寸，便于对照）
-SIZE=8
+# 方块实体铺在 y=-59。SIZE=8 → 17×17=289 个；SIZE=16 → 33×33=1089 个。
+SIZE="${BENCH_SIZE:-8}"
 LOAD_Y=-59
 
 wait_rcon() {
@@ -36,8 +36,14 @@ load_furnaces() {
   : > "$commands"
   for x in $(seq -$SIZE $SIZE); do
     for z in $(seq -$SIZE $SIZE); do
-      echo "item replace block $x $LOAD_Y $z container.0 with minecraft:iron_ore 64" >> "$commands"
-      echo "item replace block $x $LOAD_Y $z container.1 with minecraft:coal 64" >> "$commands"
+      if [ "$KIND" = "hopper" ]; then
+        # 漏斗：装满物品，它会每 tick 尝试往下推
+        echo "item replace block $x $LOAD_Y $z container.0 with minecraft:cobblestone 64" >> "$commands"
+        echo "item replace block $x $LOAD_Y $z container.1 with minecraft:cobblestone 64" >> "$commands"
+      else
+        echo "item replace block $x $LOAD_Y $z container.0 with minecraft:iron_ore 64" >> "$commands"
+        echo "item replace block $x $LOAD_Y $z container.1 with minecraft:coal 64" >> "$commands"
+      fi
     done
   done
   local count
@@ -62,7 +68,8 @@ run_case() {
   wait_rcon
 
   # 基准世界是漏斗+熔炉；把漏斗换成熔炉，全部装料
-  $RCON "fill -$SIZE $LOAD_Y -$SIZE $SIZE $LOAD_Y $SIZE minecraft:furnace replace minecraft:hopper" > /dev/null 2>&1
+  $RCON "fill -$SIZE $LOAD_Y -$SIZE $SIZE $LOAD_Y $SIZE minecraft:$KIND replace minecraft:hopper" > /dev/null 2>&1
+  $RCON "fill -$SIZE $LOAD_Y -$SIZE $SIZE $LOAD_Y $SIZE minecraft:$KIND replace minecraft:furnace" > /dev/null 2>&1
   sleep 2
   load_furnaces
 
@@ -80,8 +87,12 @@ run_case() {
 
 : > "$RESULT_DIR/results.txt"
 
+KIND="${BENCH_KIND:-furnace}"
+LANES="${BENCH_LANES:-2}"
+echo "测试类型=$KIND 并行度=$LANES 规模=$((2*SIZE+1))x$((2*SIZE+1))"
 run_case serial
-run_case parallel -PparallelBlocks=2 -PregionShift=1 -PsafeTypes=minecraft:furnace
+run_case parallel "-PparallelBlocks=$LANES" -PregionShift=1 "-PsafeTypes=minecraft:$KIND"
+run_case spin "-PparallelBlocks=$LANES" -PregionShift=1 "-PsafeTypes=minecraft:$KIND" -Pspin
 
 echo ""
 echo "=== 结果 ==="

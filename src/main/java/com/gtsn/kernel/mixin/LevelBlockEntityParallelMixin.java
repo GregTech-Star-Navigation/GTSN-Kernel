@@ -86,6 +86,10 @@ public abstract class LevelBlockEntityParallelMixin {
             Integer.getInteger("gtsnkernel.blocks.parallelism", 2);
 
     @Unique
+    private static final boolean GTSNKERNEL_SPIN =
+            Boolean.getBoolean("gtsnkernel.blocks.spin");
+
+    @Unique
     private static final int GTSNKERNEL_REGION_SHIFT =
             Integer.getInteger("gtsnkernel.blocks.regionShift", 4);
 
@@ -137,13 +141,22 @@ public abstract class LevelBlockEntityParallelMixin {
                 this.pendingBlockEntityTickers.clear();
             }
 
-            RegionThreadPool pool = gtsnkernel$pool();
-            List<TickingBlockEntity> survivors = ParallelBlockEntityTick.tick(
-                    this.blockEntityTickers,
-                    pool.parallelism(),
-                    GTSNKERNEL_REGION_SHIFT,
-                    pool.lanes(),
-                    this::shouldTickBlocksAt);
+            List<TickingBlockEntity> survivors;
+            if (GTSNKERNEL_SPIN) {
+                survivors = ParallelBlockEntityTick.tickWithSpin(
+                        this.blockEntityTickers,
+                        GTSNKERNEL_PARALLELISM,
+                        GTSNKERNEL_REGION_SHIFT,
+                        this::shouldTickBlocksAt);
+            } else {
+                RegionThreadPool pool = gtsnkernel$pool();
+                survivors = ParallelBlockEntityTick.tick(
+                        this.blockEntityTickers,
+                        pool.parallelism(),
+                        GTSNKERNEL_REGION_SHIFT,
+                        pool.lanes(),
+                        this::shouldTickBlocksAt);
+            }
 
             // 写回：原版是 iterator.remove() 就地剔除，这里整体替换。
             // 注意 tickingBlockEntities 仍为 true —— 期间新增的 ticker 会进 pending 列表，
