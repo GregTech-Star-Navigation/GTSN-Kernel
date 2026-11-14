@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.4 — 2026-11-14
+
+### 文档
+
+- REQ-001 补 P3 前置量化：**实体为什么比方块实体难**。
+
+  静态统计：`ai/goal/` 里 18 处跨实体查找（`getEntitiesOfClass` 11 / `getNearestPlayer` 4 /
+  `level.getEntities` 3），一个僵尸注册 12 个 goal、其中 9 类会扫附近实体。
+  `GoalSelector.tick()` 每 tick 对未运行的 goal 逐个调 `canUse()`，里面的
+  `getEntitiesOfClass` 是**遍历 AABB 内所有实体** —— 200 个僵尸即最多 2400 次判定/tick，
+  这就是一期实测 3.709ms 的来源。
+
+  实体并行的障碍不是分区，是三方共享：**读**别人状态、**写**别人（`setTarget`）、
+  **顺序**依赖（goal 优先级）。前两条不是「延迟一个 tick」能接受的语义。
+
+  因此给出两条路，并判断 B 的性价比更高：
+
+  - **A 两阶段实体 tick**（并行跑 AI 判定出意图 → 主线程串行应用）：真并行，但要改
+    `Mob` / `LivingEntity` 核心路径，量级不比 P1 小
+  - **B 空间索引优化**（`getEntitiesOfClass` 从 O(n) 遍历改网格查询）：不改语义、零并发风险，
+    收益可能比并行还大
+
 ## 0.6.3 — 2026-11-14
 
 ### 新增
